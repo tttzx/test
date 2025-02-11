@@ -96,6 +96,49 @@ class Fuwu(db.Model):
                         'baoxiuneirong': item.baoxiuneirong, 'address': item.address})
         return res
 
+class Task(db.Model):
+    __tablename__ = 'tasks'
+    task_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(255), nullable=False)
+    exec_command = db.Column(db.Text, nullable=False)
+    check_command = db.Column(db.Text, nullable=False)
+    status = db.Column(db.Enum('pending', 'running', 'completed', 'failed'), default='pending')
+    
+    dependencies = db.relationship('Task', 
+                                   secondary='task_dependencies',
+                                   primaryjoin='Task.task_id==task_dependencies.c.task_id',
+                                   secondaryjoin='Task.task_id==task_dependencies.c.dependency_id',
+                                   backref='dependents')
+
+    def __init__(self, name, exec_command, check_command):
+        self.name = name
+        self.exec_command = exec_command
+        self.check_command = check_command
+
+
+class TaskDependency(db.Model):
+    __tablename__ = 'task_dependencies'
+    task_id = db.Column(db.Integer, db.ForeignKey('tasks.task_id'), primary_key=True)
+    dependency_id = db.Column(db.Integer, db.ForeignKey('tasks.task_id'), primary_key=True)
+
+    task = db.relationship("Task", foreign_keys=[task_id])
+    dependency = db.relationship("Task", foreign_keys=[dependency_id])
+
+class TaskExecutionLog(db.Model):
+    __tablename__ = 'task_execution_logs'
+    log_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    task_id = db.Column(db.Integer, db.ForeignKey('tasks.task_id'), nullable=False)
+    execution_time = db.Column(db.DateTime, default=db.func.current_timestamp())  # 默认当前时间
+    status = db.Column(db.Enum('started', 'completed', 'failed'), nullable=False)  # 执行状态
+    message = db.Column(db.Text)  # 执行消息
+
+    # 关联任务
+    task = db.relationship('Task', backref=db.backref('execution_logs', lazy=True))
+
+    def __init__(self, task_id, status, message):
+        self.task_id = task_id
+        self.status = status
+        self.message = message
 
 # 执行创建表语句
 if __name__ == "__main__":
